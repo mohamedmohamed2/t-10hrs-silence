@@ -4,13 +4,12 @@ Every death in a world adds another "10 hours of silence interrupted by ___" tra
 at a random moment every 15 to 45 minutes. Tracks stack forever. In multiplayer the server decides when each sound
 plays and tells every player at the same moment, so everyone hears the same thing.
 
-- Death counter: one per world, shared by all players, saved with the world.
-- Death 1 = first sound file (by filename), death 2 = second file, and so on. After the last file it loops back to
-  the first, so a 300-death run with 100 clips has every clip stacked 3 times.
-- **The first kill of each boss removes the newest track** (never below 0). Re-kills don't count, so summon items
-  can't be farmed. The list of beaten bosses is saved per world. "Boss killed" means Terraria posted its purple
-  "X has been defeated!" message, so The Twins and Eater of Worlds count once per fight, and modded bosses count too.
-  The next death brings that same sound back.
+- Tracks are saved per world and shared by all players.
+- **Each death adds a random sound** that isn't already playing. Once every sound is in use, duplicates can stack.
+- **The first kill of each boss removes the oldest track** (first in, first out). Re-kills don't count, so summon
+  items can't be farmed. "Boss killed" means Terraria posted its purple "X has been defeated!" message, so The Twins
+  and Eater of Worlds count once per fight, and modded bosses count too.
+- **Volume slider:** Settings > Mod Configuration > 10 Hours of Silence. Each player sets their own (0 = muted).
 - A gray chat line announces every added or removed track.
 
 ## Install / build (once)
@@ -24,20 +23,22 @@ plays and tells every player at the same moment, so everyone hears the same thin
 For multiplayer, every player and the server need the same build of the mod (tModLoader enforces this).
 After you add sounds, rebuild and send the new mod to your friends.
 
-## Adding sounds
+## Adding sounds (with loudness normalizing)
 
-Drop `.wav`, `.ogg` or `.mp3` files into `Sounds/Interrupts/`. Name them with a number in front to control the order:
+1. Put clips in the `RawSounds` folder (any of mp3, wav, ogg, m4a, webm...). Any names are fine.
+2. Double-click `normalize_sounds.bat`. It makes every clip the same loudness and writes clean `.wav` copies into
+   `Sounds/Interrupts/`. Your originals in `RawSounds` are never changed.
+   - Needs Python once: install from python.org (tick "Add python.exe to PATH") or the Microsoft Store.
+   - First run moves anything already in `Sounds/Interrupts/` into `RawSounds` so it gets normalized too.
+   - Everything too loud or too quiet? Change `TARGET_DB` at the top of `normalize_sounds.py` (-14 louder, -22 quieter).
+3. Build + Reload in tModLoader.
 
-```
-Sounds/Interrupts/001_metal_pipe.wav
-Sounds/Interrupts/002_goku_scream.ogg
-Sounds/Interrupts/003_vine_boom.wav
-```
+Order and numbering don't matter anymore. You can add or remove sounds mid-playthrough: worlds save tracks by file
+name, so existing tracks keep their sound. If a sound file was removed, its track switches to a random sound.
+Chat shows the file name (`goku_scream` shows as "goku scream").
+**Delete `999_test_beep.wav` from `RawSounds`** once you have real sounds.
 
-The chat name comes from the filename (`002_goku_scream` shows as "goku scream").
-**Delete `999_test_beep.wav`** once you have real sounds. It's only there so you can confirm the mod works.
-
-Tips: keep clips short (under ~10 s) and trim silence at the start. 44.1 kHz 16-bit wav is the safest format.
+Tips: keep clips short (under ~10 s) and trim silence at the start.
 
 ## Where to get clips
 
@@ -66,6 +67,8 @@ Curb Your Enthusiasm theme sting, "Coffin dance" sting, "To be continued" sting.
 - Server-to-player messages only reach fully joined players (`ModPacket.Send` checks `broadcast`), and a failing
   packet handler is caught by tModLoader, so a bad packet can't crash anyone.
 - `.wav`, `.mp3` and `.ogg` all have registered sound readers, so all three formats work.
+- `SoundStyle.Volume` is capped at 1.0, so the mod can't boost quiet clips in-game. That's why normalizing happens
+  on the files before building.
 - `SoundStyle.MaxInstances = 0` means no limit, so stacked copies of the same clip don't cut each other off.
 - `Mod.GetFileNames`, `ModSystem.PostUpdateWorld/ClearWorld/SaveWorldData/LoadWorldData`, `Mod.HandlePacket` and
   `ChatHelper.BroadcastChatMessage` exist with the signatures used.
@@ -75,4 +78,6 @@ Curb Your Enthusiasm theme sting, "Coffin dance" sting, "To be continued" sting.
 - Not compiled yet: no tModLoader binaries were reachable from the build environment. The first in-game build is the real test.
 - Targets tModLoader 1.4.4 (current stable). tModLoader 1.4.5 is in preview and will need a port (.NET 10), but
   1.4.4 mods stay available on the Workshop.
-- Interval timers are not saved, so they re-randomize each time the world loads. The death count *is* saved.
+- Interval timers are not saved, so they re-randomize each time the world loads. The tracks *are* saved.
+- `normalize_sounds.py` was tested on Linux with mono/stereo, mp3/ogg/wav and very quiet/loud clips (all came out at
+  -18.0 dB). The `.bat` wrapper hasn't been run on Windows yet.

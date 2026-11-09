@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -10,20 +11,23 @@ using Terraria.DataStructures;
 using Terraria.ID;
 using Terraria.Localization;
 using Terraria.ModLoader;
+using Terraria.ModLoader.Config;
 using Terraria.ModLoader.IO;
 
 namespace TenHoursOfSilence
 {
 	public class TenHoursOfSilence : Mod
 	{
-		// Every audio file in Sounds/Interrupts, sorted by filename. Death 1 = first file, death 2 = second, ...
-		// After the last file it wraps around, so stacks keep growing past the number of clips.
+		// Every audio file in Sounds/Interrupts. Keys (file names) are what worlds save, so adding/removing files
+		// never changes which sound an existing track plays. Same list on server and clients (same mod build).
 		public static List<SoundStyle> Sounds = new();
+		public static List<string> Keys = new();
 		public static List<string> Names = new();
 
 		public override void Load()
 		{
 			Sounds.Clear();
+			Keys.Clear();
 			Names.Clear();
 			string[] exts = { ".wav", ".ogg", ".mp3" };
 			var files = GetFileNames()
@@ -34,6 +38,7 @@ namespace TenHoursOfSilence
 			foreach (string f in files) {
 				string noExt = f[..^Path.GetExtension(f).Length];
 				Sounds.Add(new SoundStyle($"{Name}/{noExt}") { MaxInstances = 0 });
+				Keys.Add(Path.GetFileName(noExt));
 				Names.Add(Path.GetFileName(noExt).TrimStart('0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '_', '-', ' ').Replace('_', ' '));
 			}
 		}
@@ -43,7 +48,15 @@ namespace TenHoursOfSilence
 		{
 			int i = reader.ReadInt32();
 			if (Main.netMode == NetmodeID.MultiplayerClient && i >= 0 && i < Sounds.Count)
-				SoundEngine.PlaySound(Sounds[i]);
+				Play(i);
+		}
+
+		// Each player's own volume slider (client-side config) applies here, on their machine only.
+		public static void Play(int i)
+		{
+			float volume = ModContent.GetInstance<SilenceConfig>().Volume / 100f;
+			if (volume > 0)
+				SoundEngine.PlaySound(Sounds[i] with { Volume = volume });
 		}
 	}
 
@@ -52,9 +65,16 @@ namespace TenHoursOfSilence
 		const int MinTicks = 15 * 60 * 60; // 15 minutes (60 ticks per second)
 		const int MaxTicks = 45 * 60 * 60; // 45 minutes
 
-		int tracks; // +1 per player death, -1 per boss defeated for the first time
+		class Track
+		{
+			public int Sound; // index into TenHoursOfSilence.Sounds
+			public int Timer = NewTimer(); // not saved, re-randomized on load
+		}
+
+		static int NewTimer() => Main.rand.Next(MinTicks, MaxTicks + 1);
+
+		readonly List<Track> tracks = new(); // oldest first: +1 per player death, oldest removed per first boss kill
 		readonly HashSet<string> bossesBeaten = new(); // saved with the world
-		readonly List<int> timers = new(); // one countdown per track; not saved, re-randomized on load
 
 		// Fires once per boss fight, exactly when the purple "X has been defeated!" message posts
 		// (once for The Twins, once for Eater of Worlds). Server/singleplayer only. Same hook CalRemix uses.
@@ -86,39 +106,50 @@ namespace TenHoursOfSilence
 
 		public override void ClearWorld()
 		{
-			tracks = 0;
-			timers.Clear();
+			tracks.Clear();
 			bossesBeaten.Clear();
 		}
 
 		public override void SaveWorldData(TagCompound tag)
 		{
-			tag["tracks"] = tracks;
+			tag["trackSounds"] = tracks.Select(t => TenHoursOfSilence.Keys[t.Sound]).ToList();
 			tag["bossesBeaten"] = bossesBeaten.ToList();
 		}
 
 		public override void LoadWorldData(TagCompound tag)
 		{
-			tracks = tag.GetInt("tracks");
+			int n = TenHoursOfSilence.Sounds.Count;
+			foreach (string key in tag.GetList<string>("trackSounds")) {
+				int i = TenHoursOfSilence.Keys.IndexOf(key);
+				if (i < 0 && n > 0) // that sound file was removed from the mod: swap in a random one, keep the count
+					i = Main.rand.Next(n);
+				if (i >= 0)
+					tracks.Add(new Track { Sound = i });
+			}
 			bossesBeaten.UnionWith(tag.GetList<string>("bossesBeaten"));
 		}
 
+		// New tracks pick a random sound that isn't already playing; once every sound is in use, any random one.
 		public void AddDeath()
 		{
-			tracks++;
-			Announce($"Death! Now also playing \"10 hours of silence interrupted by {NameOf(tracks - 1)}\" ({tracks} tracks)");
+			int n = TenHoursOfSilence.Sounds.Count;
+			if (n == 0)
+				return;
+			var free = Enumerable.Range(0, n).Except(tracks.Select(t => t.Sound)).ToList();
+			int sound = free.Count > 0 ? free[Main.rand.Next(free.Count)] : Main.rand.Next(n);
+			tracks.Add(new Track { Sound = sound });
+			Announce($"Death! Now also playing \"10 hours of silence interrupted by {TenHoursOfSilence.Names[sound]}\" ({tracks.Count} tracks)");
 		}
 
-		// Removes the newest track; the next death brings that same sound back.
+		// First in, first out: the oldest track stops.
 		void RemoveTrack()
 		{
-			if (tracks == 0)
+			if (tracks.Count == 0)
 				return;
-			tracks--;
-			Announce($"Boss defeated! \"10 hours of silence interrupted by {NameOf(tracks)}\" stopped ({tracks} tracks left)");
+			int sound = tracks[0].Sound;
+			tracks.RemoveAt(0);
+			Announce($"Boss defeated! \"10 hours of silence interrupted by {TenHoursOfSilence.Names[sound]}\" stopped ({tracks.Count} tracks left)");
 		}
-
-		static string NameOf(int track) => TenHoursOfSilence.Names.Count == 0 ? "nothing" : TenHoursOfSilence.Names[track % TenHoursOfSilence.Names.Count];
 
 		static void Announce(string msg)
 		{
@@ -131,27 +162,17 @@ namespace TenHoursOfSilence
 		// Runs on the server (multiplayer) or locally (singleplayer), never on multiplayer clients.
 		public override void PostUpdateWorld()
 		{
-			var sounds = TenHoursOfSilence.Sounds;
-			if (sounds.Count == 0)
-				return;
-
-			while (timers.Count < tracks)
-				timers.Add(Main.rand.Next(MinTicks, MaxTicks + 1));
-			if (timers.Count > tracks)
-				timers.RemoveRange(tracks, timers.Count - tracks);
-
-			for (int t = 0; t < timers.Count; t++) {
-				if (--timers[t] > 0)
+			foreach (Track t in tracks) {
+				if (--t.Timer > 0)
 					continue;
-				timers[t] = Main.rand.Next(MinTicks, MaxTicks + 1);
-				int i = t % sounds.Count;
+				t.Timer = NewTimer();
 				if (Main.netMode == NetmodeID.Server) {
 					ModPacket p = Mod.GetPacket();
-					p.Write(i);
+					p.Write(t.Sound);
 					p.Send();
 				}
 				else {
-					SoundEngine.PlaySound(sounds[i]);
+					TenHoursOfSilence.Play(t.Sound);
 				}
 			}
 		}
@@ -166,5 +187,16 @@ namespace TenHoursOfSilence
 			if (Main.netMode != NetmodeID.MultiplayerClient && Player.whoAmI != 255)
 				ModContent.GetInstance<SilenceSystem>().AddDeath();
 		}
+	}
+
+	public class SilenceConfig : ModConfig
+	{
+		public override ConfigScope Mode => ConfigScope.ClientSide; // each player sets their own
+
+		[Range(0, 100)]
+		[Increment(5)]
+		[DefaultValue(100)]
+		[Slider]
+		public int Volume;
 	}
 }

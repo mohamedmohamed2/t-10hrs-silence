@@ -1,0 +1,12 @@
+SilenceConfig: {
+	DisplayName: 10 Hours of Silence
+
+	Volume: {
+		Label: Interruption volume (%)
+		Tooltip:
+			'''
+			How loud the interruptions are for you only. 0 mutes them.
+			Doesn't change anyone else's volume. Also scaled by the game's Sound volume.
+			'''
+	}
+}
