@@ -22,7 +22,7 @@ After you add sounds, rebuild and send the new mod to your friends.
 
 ## Adding sounds
 
-Drop `.wav` or `.ogg` files (mp3 may also work) into `Sounds/Interrupts/`. Name them with a number in front to control the order:
+Drop `.wav`, `.ogg` or `.mp3` files into `Sounds/Interrupts/`. Name them with a number in front to control the order:
 
 ```
 Sounds/Interrupts/001_metal_pipe.wav
