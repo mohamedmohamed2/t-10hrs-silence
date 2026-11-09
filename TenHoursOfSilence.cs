@@ -52,26 +52,46 @@ namespace TenHoursOfSilence
 		const int MinTicks = 15 * 60 * 60; // 15 minutes (60 ticks per second)
 		const int MaxTicks = 45 * 60 * 60; // 45 minutes
 
-		int deaths;
-		readonly List<int> timers = new(); // one countdown per stacked track; not saved, re-randomized on load
+		int tracks; // +1 per player death, -1 per boss defeated
+		readonly List<int> timers = new(); // one countdown per track; not saved, re-randomized on load
+
+		// Fires once per boss fight, exactly when the purple "X has been defeated!" message posts
+		// (once for The Twins, once for Eater of Worlds). Server/singleplayer only. Same hook CalRemix uses.
+		public override void Load() => On_NPC.DoDeathEvents_CelebrateBossDeath += (orig, self, typeName) => {
+			orig(self, typeName);
+			if (Main.netMode != NetmodeID.MultiplayerClient)
+				RemoveTrack();
+		};
 
 		public override void ClearWorld()
 		{
-			deaths = 0;
+			tracks = 0;
 			timers.Clear();
 		}
 
-		public override void SaveWorldData(TagCompound tag) => tag["deaths"] = deaths;
+		public override void SaveWorldData(TagCompound tag) => tag["tracks"] = tracks;
 
-		public override void LoadWorldData(TagCompound tag) => deaths = tag.GetInt("deaths");
+		public override void LoadWorldData(TagCompound tag) => tracks = tag.GetInt("tracks");
 
 		public void AddDeath()
 		{
-			deaths++;
-			var sounds = TenHoursOfSilence.Sounds;
-			if (sounds.Count == 0)
+			tracks++;
+			Announce($"Death! Now also playing \"10 hours of silence interrupted by {NameOf(tracks - 1)}\" ({tracks} tracks)");
+		}
+
+		// Removes the newest track; the next death brings that same sound back.
+		public void RemoveTrack()
+		{
+			if (tracks == 0)
 				return;
-			string msg = $"Death #{deaths}: now also playing \"10 hours of silence interrupted by {TenHoursOfSilence.Names[(deaths - 1) % sounds.Count]}\"";
+			tracks--;
+			Announce($"Boss defeated! \"10 hours of silence interrupted by {NameOf(tracks)}\" stopped ({tracks} tracks left)");
+		}
+
+		static string NameOf(int track) => TenHoursOfSilence.Names.Count == 0 ? "nothing" : TenHoursOfSilence.Names[track % TenHoursOfSilence.Names.Count];
+
+		static void Announce(string msg)
+		{
 			if (Main.netMode == NetmodeID.Server)
 				ChatHelper.BroadcastChatMessage(NetworkText.FromLiteral(msg), Color.Gray);
 			else
@@ -85,8 +105,10 @@ namespace TenHoursOfSilence
 			if (sounds.Count == 0)
 				return;
 
-			while (timers.Count < deaths)
+			while (timers.Count < tracks)
 				timers.Add(Main.rand.Next(MinTicks, MaxTicks + 1));
+			if (timers.Count > tracks)
+				timers.RemoveRange(tracks, timers.Count - tracks);
 
 			for (int t = 0; t < timers.Count; t++) {
 				if (--timers[t] > 0)

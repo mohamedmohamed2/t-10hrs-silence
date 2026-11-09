@@ -1,2 +1,3 @@
 Every death in this world adds another "10 hours of silence interrupted by ___" track.
 Each track plays its sound at a random moment every 15 to 45 minutes, for everyone on the server. They stack forever.
+Every boss you defeat removes the newest track.

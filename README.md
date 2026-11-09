@@ -7,7 +7,10 @@ plays and tells every player at the same moment, so everyone hears the same thin
 - Death counter: one per world, shared by all players, saved with the world.
 - Death 1 = first sound file (by filename), death 2 = second file, and so on. After the last file it loops back to
   the first, so a 300-death run with 100 clips has every clip stacked 3 times.
-- A gray chat line announces each new track.
+- **Killing a boss removes the newest track** (never below 0). "Boss killed" means Terraria posted its purple
+  "X has been defeated!" message, so The Twins and Eater of Worlds count once per fight, and modded bosses count too.
+  The next death brings that same sound back.
+- A gray chat line announces every added or removed track.
 
 ## Install / build (once)
 
