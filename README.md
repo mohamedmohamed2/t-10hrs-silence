@@ -1,7 +1,7 @@
 # 10 Hours of Silence (tModLoader mod)
 
 Every death in a world adds another "10 hours of silence interrupted by ___" track. Each track plays its sound
-at a random moment every 5 to 30 minutes. Tracks stack forever. In multiplayer the server decides when each sound
+at a random moment every 15 to 45 minutes. Tracks stack forever. In multiplayer the server decides when each sound
 plays and tells every player at the same moment, so everyone hears the same thing.
 
 - Death counter: one per world, shared by all players, saved with the world.
@@ -57,7 +57,10 @@ Curb Your Enthusiasm theme sting, "Coffin dance" sting, "To be continued" sting.
 ## Verified against tModLoader source (stable branch, Nov 2026)
 
 - `ModPlayer.Kill` is documented as "Called on local, server, and remote clients", so counting only on the
-  server / in singleplayer counts each death exactly once.
+  server / in singleplayer counts each death exactly once. Boss Checklist (JavidPack/BossChecklist) counts deaths
+  the same way, and the mod also copies its guard against player slot 255 (the game's placeholder player).
+- Server-to-player messages only reach fully joined players (`ModPacket.Send` checks `broadcast`), and a failing
+  packet handler is caught by tModLoader, so a bad packet can't crash anyone.
 - `.wav`, `.mp3` and `.ogg` all have registered sound readers, so all three formats work.
 - `SoundStyle.MaxInstances = 0` means no limit, so stacked copies of the same clip don't cut each other off.
 - `Mod.GetFileNames`, `ModSystem.PostUpdateWorld/ClearWorld/SaveWorldData/LoadWorldData`, `Mod.HandlePacket` and

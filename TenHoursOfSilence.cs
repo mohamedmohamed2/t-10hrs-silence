@@ -49,8 +49,8 @@ namespace TenHoursOfSilence
 
 	public class SilenceSystem : ModSystem
 	{
-		const int MinTicks = 5 * 60 * 60;  // 5 minutes (60 ticks per second)
-		const int MaxTicks = 30 * 60 * 60; // 30 minutes
+		const int MinTicks = 15 * 60 * 60; // 15 minutes (60 ticks per second)
+		const int MaxTicks = 45 * 60 * 60; // 45 minutes
 
 		int deaths;
 		readonly List<int> timers = new(); // one countdown per stacked track; not saved, re-randomized on load
@@ -107,10 +107,11 @@ namespace TenHoursOfSilence
 
 	public class SilencePlayer : ModPlayer
 	{
-		// Kill runs everywhere the death is processed; only count it on the server / in singleplayer so it counts once.
+		// Kill runs on local, server and remote clients; only count it on the server / in singleplayer so it counts once.
+		// Slot 255 is the game's placeholder player, not a real one (same guard as the Boss Checklist mod).
 		public override void Kill(double damage, int hitDirection, bool pvp, PlayerDeathReason damageSource)
 		{
-			if (Main.netMode != NetmodeID.MultiplayerClient)
+			if (Main.netMode != NetmodeID.MultiplayerClient && Player.whoAmI != 255)
 				ModContent.GetInstance<SilenceSystem>().AddDeath();
 		}
 	}
