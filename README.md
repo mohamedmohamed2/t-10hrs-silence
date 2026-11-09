@@ -54,9 +54,18 @@ Undertale Sans "megalovania" sting, Halo "oh no", Duolingo, dial-up modem, "yeet
 "It's free real estate", John Cena intro, "Nope" (Engineer), "Directed by Robert B. Weide",
 Curb Your Enthusiasm theme sting, "Coffin dance" sting, "To be continued" sting.
 
-## Known unknowns (test these)
+## Verified against tModLoader source (stable branch, Nov 2026)
 
-- Not compiled yet. The build environment had no access to tModLoader, so the first in-game build is the real test.
-- Multiplayer death counting relies on the server running the death hook for remote players. I believe it does
-  in 1.4.4, but test with two players: both should see the gray chat line once per death, not zero or twice.
+- `ModPlayer.Kill` is documented as "Called on local, server, and remote clients", so counting only on the
+  server / in singleplayer counts each death exactly once.
+- `.wav`, `.mp3` and `.ogg` all have registered sound readers, so all three formats work.
+- `SoundStyle.MaxInstances = 0` means no limit, so stacked copies of the same clip don't cut each other off.
+- `Mod.GetFileNames`, `ModSystem.PostUpdateWorld/ClearWorld/SaveWorldData/LoadWorldData`, `Mod.HandlePacket` and
+  `ChatHelper.BroadcastChatMessage` exist with the signatures used.
+
+## Still untested
+
+- Not compiled yet: no tModLoader binaries were reachable from the build environment. The first in-game build is the real test.
+- Targets tModLoader 1.4.4 (current stable). tModLoader 1.4.5 is in preview and will need a port (.NET 10), but
+  1.4.4 mods stay available on the Workshop.
 - Interval timers are not saved, so they re-randomize each time the world loads. The death count *is* saved.
