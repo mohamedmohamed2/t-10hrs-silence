@@ -52,7 +52,8 @@ namespace TenHoursOfSilence
 		const int MinTicks = 15 * 60 * 60; // 15 minutes (60 ticks per second)
 		const int MaxTicks = 45 * 60 * 60; // 45 minutes
 
-		int tracks; // +1 per player death, -1 per boss defeated
+		int tracks; // +1 per player death, -1 per boss defeated for the first time
+		readonly HashSet<string> bossesBeaten = new(); // saved with the world
 		readonly List<int> timers = new(); // one countdown per track; not saved, re-randomized on load
 
 		// Fires once per boss fight, exactly when the purple "X has been defeated!" message posts
@@ -60,18 +61,47 @@ namespace TenHoursOfSilence
 		public override void Load() => On_NPC.DoDeathEvents_CelebrateBossDeath += (orig, self, typeName) => {
 			orig(self, typeName);
 			if (Main.netMode != NetmodeID.MultiplayerClient)
-				RemoveTrack();
+				BossDefeated(self);
 		};
+
+		// One key per boss fight, so multi-part bosses can't count twice.
+		static string BossKey(NPC npc)
+		{
+			if (npc.realLife >= 0) // worm segments sharing one health bar (e.g. The Destroyer) -> the head
+				npc = Main.npc[npc.realLife];
+			return npc.type switch {
+				NPCID.Retinazer or NPCID.Spazmatism => "TheTwins",
+				NPCID.EaterofWorldsHead or NPCID.EaterofWorldsBody or NPCID.EaterofWorldsTail => "EaterOfWorlds",
+				_ => npc.ModNPC?.FullName ?? npc.type.ToString(),
+			};
+		}
+
+		void BossDefeated(NPC npc)
+		{
+			if (bossesBeaten.Add(BossKey(npc)))
+				RemoveTrack();
+			else
+				Announce("Boss already beaten before, no track removed.");
+		}
 
 		public override void ClearWorld()
 		{
 			tracks = 0;
 			timers.Clear();
+			bossesBeaten.Clear();
 		}
 
-		public override void SaveWorldData(TagCompound tag) => tag["tracks"] = tracks;
+		public override void SaveWorldData(TagCompound tag)
+		{
+			tag["tracks"] = tracks;
+			tag["bossesBeaten"] = bossesBeaten.ToList();
+		}
 
-		public override void LoadWorldData(TagCompound tag) => tracks = tag.GetInt("tracks");
+		public override void LoadWorldData(TagCompound tag)
+		{
+			tracks = tag.GetInt("tracks");
+			bossesBeaten.UnionWith(tag.GetList<string>("bossesBeaten"));
+		}
 
 		public void AddDeath()
 		{
@@ -80,7 +110,7 @@ namespace TenHoursOfSilence
 		}
 
 		// Removes the newest track; the next death brings that same sound back.
-		public void RemoveTrack()
+		void RemoveTrack()
 		{
 			if (tracks == 0)
 				return;
