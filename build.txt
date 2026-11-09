@@ -1,0 +1,5 @@
+displayName = 10 Hours of Silence
+author = blizzardsznnn
+version = 0.1
+side = Both
+buildIgnore = *.csproj, *.user, *.md, obj\*, bin\*, .vs\*, .git\*, .gitignore
